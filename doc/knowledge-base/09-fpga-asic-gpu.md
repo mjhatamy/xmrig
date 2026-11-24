@@ -33,6 +33,28 @@ instruction set; an NTHU feasibility study did not get it running).
 **Verdict:** do not invest in FPGA for RandomX. It is a multi-person-year effort with an
 expected result far below a commodity CPU in H/s, H/J and H/$.
 
+### FPGA PCIe card as a co-processor for the CPU miner?
+
+Also no. The measured per-hash breakdown (`07-performance-analysis.md`) leaves almost
+nothing to offload:
+
+| Part of the hash | Share of CPU time | Offload to an FPGA over PCIe? |
+|---|---|---|
+| JIT program execution (VM loop) | ~95 % | Can't be split: each iteration depends on the previous one through random dataset and scratchpad reads that must hit the CPU's own caches. Moving it to the card = the FPGA does the mining (above). |
+| AES scratchpad fill + hash | ~2.6 % (53 µs) | Loses: 2 MiB in + 2 MiB out per hash ≈ 84 µs each way at ~25 GB/s, the DMA'd scratchpad arrives outside the core's L2 (cache residency was worth ~14 % of loop time, E4), and at desktop rates (27 kH/s × 4 MiB ≈ 108 GB/s) it exceeds even PCIe 5.0 x16. |
+| JIT compile | ~2.1 % | On the serial critical path between programs; PCIe round trips add latency instead of saving it. |
+| Blake2b, program generation | ~0.3 % | Negligible. |
+| Dataset/cache init | once per seed (~2.8 days) | Saves seconds every few days (≈ 0.01–0.02 %). |
+| Dataset memory | — | Moving the 2 GiB dataset to card memory would make every dataset read ~0.5–1 µs over PCIe instead of ~0.1 µs from local DRAM. |
+
+Amdahl's law: even a zero-time accelerator for everything except the VM loop gives ≤ ~5 %,
+and the transfers and cache misses turn that into a loss. The only way a card adds
+hashrate is as a **separate miner** running whole hashes itself (only the job blob goes in,
+results come out) — the standalone case above, estimated at ≤ ~1–2 kH/s for an optimistic,
+not-yet-existing design on a multi-thousand-dollar card. On a Mac it is impractical anyway:
+only the Mac Pro has PCIe slots, other Macs would need a Thunderbolt enclosure (PCIe ×4),
+and FPGA vendor drivers/toolchains target Linux/Windows, not macOS on Apple Silicon.
+
 ## ASIC: they exist now
 
 Two Bitmain RandomX devices appear in listings. All figures are vendor, reseller or pool
