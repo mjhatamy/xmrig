@@ -100,7 +100,48 @@ which xmrig already supports — a CPU keeps working after the fork, an ASIC may
   10× worse efficiency.
 * Apple GPUs: no Metal backend exists; OpenCL on macOS is deprecated (OpenCL 1.2) while
   xmrig targets OpenCL 2.0 by default. Even with a port, expect it to be far below the
-  CPU cores on the same chip. **Not worth pursuing.**
+  CPU cores on the same chip. **Not worth pursuing** — reasoning below.
+
+### Would a Metal (Apple GPU) backend help Monero mining?
+
+No meaningful gain is expected; running it next to the CPU miner may even lower the total.
+
+1. **No FP64 on Apple GPUs.** RandomX needs IEEE-754 double precision with all four
+   rounding modes (FADD/FSUB/FMUL/FDIV/FSQRT on 2-wide doubles every iteration). Apple
+   GPUs have no double-precision hardware and the Metal Shading Language has no `double`.
+   xmrig's existing GPU kernel requires `cl_khr_fp64` (`cl/rx/randomx_vm.cl:21`, 36 uses of
+   `double`), so it cannot run on Apple GPUs at all. A Metal port must emulate correctly
+   rounded doubles with 32-bit integer ALUs: roughly 25–50 instructions per add, 40–80 per
+   multiply, 150–400 per divide/square root — on the order of 10,000+ GPU instructions per
+   RandomX iteration vs ~300 CPU instructions. Results must match CPUs bit-for-bit or
+   shares are rejected (xmrig re-verifies GPU results on the CPU, `JobResults.cpp`).
+2. **No per-program JIT.** The fast GPU path (`OclRxJitRunner`) writes machine code for
+   each RandomX program and exists only for AMD GCN/RDNA (`OclWorker.cpp:73`). Apple's GPU
+   instruction set is undocumented and Metal accepts only MSL/AIR through Apple's
+   compiler, which is far too slow to run 8× per hash — so it must be an interpreter, with
+   SIMD divergence because every hash runs a different random program.
+3. **Memory.** Every hash in flight needs its own 2 MiB scratchpad; a GPU needs hundreds in
+   flight, so scratchpads live in DRAM instead of cache (tens of MB of traffic per hash).
+   Unified memory is a plus (the 2 GiB dataset needs no copy) but the GPU and CPU then
+   share DRAM bandwidth/latency — the CPU miner's main bottleneck
+   (`07-performance-analysis.md`) — plus the SLC and the package power budget.
+4. **Scale check.** Discrete GPUs *with* FP64 hardware and xmrig's tuned kernels manage only
+   ~1.5–1.7 kH/s (RTX 3080 class, 760 GB/s). Scaling by memory bandwidth alone puts an M1
+   GPU (68 GB/s) near ~140 H/s and an M4 Max GPU (546 GB/s) near ~1.1 kH/s *before* the
+   FP64-emulation penalty. Rough expectation: low hundreds of H/s at best on large Apple
+   GPUs, a few percent of the same chip's CPU hashrate, and likely offset by what it takes
+   away from the CPU miner. These are estimates — no Apple GPU RandomX implementation exists
+   to measure.
+5. **Partial offloads don't pay either.** Moving the AES scratchpad fill/hash (2.6 % of CPU
+   time) or Blake2b (0.2 %) to the GPU costs more in per-hash CPU↔GPU synchronisation than
+   it saves and breaks cache locality; dataset init runs once per seed (~2.8 days), so
+   speeding it up changes nothing.
+
+Effort for a full Metal backend (MSL kernels for Blake2b, AES, program generation, a VM
+interpreter with soft-FP64, plus backend plumbing like `backend/opencl`): weeks to months,
+with a high chance the result is slower than the CPU. Metal only makes sense for
+GPU-friendly algorithms (e.g. KawPow), i.e. other coins — and even there Apple GPUs trail
+discrete cards.
 
 ## What actually buys more RandomX hashes
 

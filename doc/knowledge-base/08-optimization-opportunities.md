@@ -47,7 +47,8 @@ Rejected after analysis (don't spend time here):
 * *Compiler flags* (`-mcpu=apple-mN`, LTO, PGO): only touch the ≤ 5 % of C++ in the hot
   path.
 * *Light mode*, *more threads than cores* (no SMT on Apple), *network/TLS tweaks*.
-* *FPGA / GPU*: see `09-fpga-asic-gpu.md`.
+* *FPGA / GPU*, including an Apple **Metal** backend (no FP64 on Apple GPUs, no per-program
+  JIT, shared memory/power with the CPU miner): see `09-fpga-asic-gpu.md`.
 
 ## C. Platform-level
 
