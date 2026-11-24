@@ -147,13 +147,16 @@ No meaningful gain is expected; running it next to the CPU miner may even lower 
    Unified memory is a plus (the 2 GiB dataset needs no copy) but the GPU and CPU then
    share DRAM bandwidth/latency — the CPU miner's main bottleneck
    (`07-performance-analysis.md`) — plus the SLC and the package power budget.
-4. **Scale check.** Discrete GPUs *with* FP64 hardware and xmrig's tuned kernels manage only
-   ~1.5–1.7 kH/s (RTX 3080 class, 760 GB/s). Scaling by memory bandwidth alone puts an M1
-   GPU (68 GB/s) near ~140 H/s and an M4 Max GPU (546 GB/s) near ~1.1 kH/s *before* the
-   FP64-emulation penalty. Rough expectation: low hundreds of H/s at best on large Apple
-   GPUs, a few percent of the same chip's CPU hashrate, and likely offset by what it takes
-   away from the CPU miner. These are estimates — no Apple GPU RandomX implementation exists
-   to measure.
+4. **Scale check.** Measured CUDA RandomX results scale with memory bandwidth at roughly
+   **2–3.4 H/s per GB/s** (V100 2,524 H/s at 900 GB/s; Titan V 2,199 H/s at 653 GB/s;
+   RTX 2080 Ti 1,641 H/s at 616 GB/s; RTX 3080-class ~1.5 kH/s at 760 GB/s). The 2080 Ti
+   nearly matches the V100 with 1/16 of its FP64 rate, so on NVIDIA the FP64 *rate* is not
+   the limit — memory is. Scaling an Apple GPU the same way gives an M1 (68 GB/s) ~140–230
+   H/s and an M4 Max (546 GB/s) ~1.1–1.9 kH/s as an *upper bound*, before the cost of
+   emulating FP64 and with the GPU and CPU fighting over the same DRAM (which raises the
+   latency the CPU miner is bound by) and power budget. Realistic net gain over the CPU
+   alone: small (single-digit to low-double-digit % in a best case), possibly zero. These
+   are estimates — no Apple GPU RandomX implementation exists to measure.
 5. **Partial offloads don't pay either.** Moving the AES scratchpad fill/hash (2.6 % of CPU
    time) or Blake2b (0.2 %) to the GPU costs more in per-hash CPU↔GPU synchronisation than
    it saves and breaks cache locality; dataset init runs once per seed (~2.8 days), so
@@ -161,9 +164,34 @@ No meaningful gain is expected; running it next to the CPU miner may even lower 
 
 Effort for a full Metal backend (MSL kernels for Blake2b, AES, program generation, a VM
 interpreter with soft-FP64, plus backend plumbing like `backend/opencl`): weeks to months,
-with a high chance the result is slower than the CPU. Metal only makes sense for
-GPU-friendly algorithms (e.g. KawPow), i.e. other coins — and even there Apple GPUs trail
-discrete cards.
+with a high chance the net gain is negligible. Metal only makes sense for GPU-friendly
+algorithms (e.g. KawPow), i.e. other coins — and even there Apple GPUs trail discrete
+cards.
+
+### What about a datacenter GPU such as the NVIDIA B300?
+
+B300 (Blackwell Ultra): 288 GB HBM3e at **8 TB/s**, ~1.1–1.4 kW TDP, ~1.3 TFLOPS FP64
+(NVIDIA cut FP64 sharply in favour of FP4 AI throughput). Sold as SXM modules in 8-GPU
+HGX/DGX servers and NVL72 racks, tens of thousands of dollars per GPU.
+
+* **FP64 cut doesn't matter for RandomX**: a hash needs ~3.5 M FP64 operations, so even
+  30 kH/s needs only ~0.1 TFLOPS. Memory bandwidth/latency is the limit.
+* **Estimate**: 8,000 GB/s × 2–3.4 H/s per GB/s ≈ **16–27 kH/s** (v1), assuming the
+  kernels scale to it — unmeasured; HBM latency isn't lower than older HBM and the
+  RandomX GPU kernels date from 2019 (RandomX_CUDA, V100-era).
+* **That is one desktop CPU**: a Ryzen 9 9950X does 20–27 kH/s at 100–285 W for ~$600.
+  During RandomX older datacenter GPUs drew ~55–60 % of TDP (V100 177 W, Titan V 125 W),
+  so expect a B300 at very roughly 500–800 W ⇒ ~20–50 H/J vs 95–318 H/J for CPUs and
+  ~405 H/J claimed for the X9.
+* **Economics**: at the ~$0.03/day per kH/s implied by Kryptex's X5 figure (May 2026,
+  varies with price and network hashrate), 16–27 kH/s grosses well under $1/day — less
+  than its own electricity (~12–19 kWh/day). Renting one costs dollars per hour. Buying
+  or renting a B300 to mine Monero loses money by orders of magnitude.
+* **Software**: this tree's OpenCL RandomX kernels implement only RandomX v1 (256-instruction
+  programs, no v2 tweaks); NVIDIA uses the external `xmrig-cuda` plugin, whose v2 status
+  wasn't checked here. A GPU path must support `rx/2` before the FCMP++ fork.
+* **Not usable with a Mac** (no NVIDIA drivers on macOS/Apple Silicon), and like any GPU
+  it can only mine *alongside* the CPU, not make the CPU's hashes faster.
 
 ## What actually buys more RandomX hashes
 
