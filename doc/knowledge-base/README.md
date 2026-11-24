@@ -48,7 +48,9 @@ caveats — it was an x86-64 Linux VM, not a Mac).
    try the targeted JIT/QoS experiments in `08`.
 5. **FPGA**: not viable (per-hash 2 MiB scratchpad SRAM, FP64 with rounding modes, random
    programs, dependent DRAM reads) — expect far below a CPU. **GPU**: 5–20× worse H/J than
-   CPUs. **ASIC**: exists (Antminer X5, ~212 kH/s @ 1.35 kW); check RandomX v2 support.
+   CPUs. **ASIC**: Antminer X5 (~212 kH/s @ 1.35 kW) is listed; the X9 (claimed 1 MH/s @
+   2.47 kW) was announced but reportedly cancelled before shipping. Neither is known to
+   support RandomX v2, which Monero's FCMP++ fork will activate (no mainnet date yet).
 6. **Monero's FCMP++ fork** switches to RandomX v2 (`rx/2`) automatically when the blob
    version reaches 17 — already implemented in this tree.
 

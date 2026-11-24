@@ -58,8 +58,9 @@ Rejected after analysis (don't spend time here):
 
 ## D. Hardware
 
-ASIC (Antminer X5, ~212 kH/s @ 1.35 kW) is the only thing that beats CPUs per box; FPGAs
-and GPUs do not. Details: `09-fpga-asic-gpu.md`.
+ASICs are the only thing that beats CPUs per box: Antminer X5 (~212 kH/s @ 1.35 kW) and the
+announced-but-reportedly-cancelled X9 (claimed 1 MH/s @ 2.47 kW). Beware pre-order scams
+and the RandomX v2 fork risk. FPGAs and GPUs do not beat CPUs. Details: `09-fpga-asic-gpu.md`.
 
 ## Suggested order of work
 

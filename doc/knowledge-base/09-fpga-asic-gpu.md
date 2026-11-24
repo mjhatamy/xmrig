@@ -2,7 +2,8 @@
 
 Short answer: **an FPGA will not beat your Mac or a desktop CPU on RandomX, a GPU is
 5–20× less energy-efficient than a CPU, and the only hardware that beats CPUs is a
-dedicated ASIC (Bitmain Antminer X5).** Details and numbers below.
+dedicated ASIC (Bitmain Antminer X5; the much stronger X9 was announced but reportedly
+cancelled before shipping).** Details and numbers below.
 
 ## Why RandomX resists FPGAs (from the algorithm, not just the docs)
 
@@ -32,17 +33,46 @@ instruction set; an NTHU feasibility study did not get it running).
 **Verdict:** do not invest in FPGA for RandomX. It is a multi-person-year effort with an
 expected result far below a commodity CPU in H/s, H/J and H/$.
 
-## ASIC: it exists now
+## ASIC: they exist now
 
-Kryptex (a pool, i.e. a commercially interested source; no independent benchmark found)
-lists the **Bitmain Antminer X5**, described as the first professional RandomX ASIC for
-Monero (article dated 19 May 2026): **~212 kH/s at ~1350 W ≈ 157 H/J**.
+Two Bitmain RandomX devices appear in listings. All figures are vendor, reseller or pool
+claims (commercially interested sources); I found no independent benchmark or teardown.
+Status as of November 2026:
 
-How that compares (CPU numbers from SChernykh's RandomX v2 testing gist, measured with
-large pages + MSR mod; Apple numbers are Kryptex estimates):
+| Model | Claimed hashrate | Power | H/J | Status |
+|---|---|---|---|---|
+| **Antminer X5** | ~212 kH/s | ~1350 W | ~157 | Listed by Kryptex (article dated 19 May 2026) as Bitmain's first professional RandomX ASIC for Monero |
+| **Antminer X9** | 1 MH/s (±5 %) | 2,472 W (2.47 J/kH) | ~405 | Sales opened late Dec 2025 at ~US$5,600 (Bitmain-affiliated launch post), deliveries planned for July 2026. From mid-May 2026 resellers told pre-order buyers Bitmain had discontinued it and refunded deposits; one site calls it an official cancellation, a reseller says no official statement exists. No Bitmain primary source found and **no evidence any units shipped**. Some shops still list "July 2026 batch" units (US$4.3k–6.4k). |
+
+If the X9's numbers are real, one unit ≈ 37 Ryzen 9 9950X at 285 W, ≈ 150 M4 Pro, ≈ 500 M1,
+with ~2.6× the X5's efficiency, 1.3–2× the H/J of the best power-tuned Ryzens below and
+~2.7× the Apple estimates — the first RandomX device that would clearly beat CPUs on
+efficiency, not just per box.
+
+Before buying any RandomX ASIC:
+
+1. **Availability and scams.** A product reported as cancelled is still offered for
+   pre-order, including on domains styled as an "official Bitmain store" that are not
+   Bitmain's own shop (e.g. `antminer-x9.store`). Buy only from Bitmain directly or an
+   established reseller with enforceable refund terms; don't pay for "in stock" X9s
+   without proof of delivery.
+2. **RandomX v2 risk.** Monero mainnet still uses RandomX v1 (`rx/0`). The FCMP++ stressnet
+   (test network) forked on 5 Oct 2026 with v2 support; no mainnet date is announced (a
+   non-binding developer target points to spring 2027). No source claims the X5 or X9
+   supports v2 (384-instruction programs, new CFROUND rule, AES F/E mixing, 2-ahead
+   dataset prefetch, commitment hash — `05-randomx-internals.md`). A fixed-function v1
+   design would stop being able to mine Monero when v2 activates. Monero has forked away
+   from ASICs before (2018–2019 CryptoNight tweaks, then RandomX in Nov 2019).
+3. **Economics.** At 2.47 kW the X9 uses ~59 kWh/day (≈ $6/day at $0.10/kWh, ≈ $9/day at
+   $0.15/kWh). Revenue scales with your share of network hashrate and the XMR price — use
+   a live calculator — and the time left before v2 activation bounds the payback window.
+
+How the claimed ASIC figures compare (CPU numbers from SChernykh's RandomX v2 testing gist,
+measured with large pages + MSR mod; Apple numbers are Kryptex estimates):
 
 | Device | RandomX v1 H/s | Power | H/J |
 |---|---|---|---|
+| Antminer X9 (vendor claim, availability unclear) | ~1,000,000 | 2472 W | ~405 |
 | Antminer X5 (Kryptex) | ~212,000 | 1350 W | ~157 |
 | Ryzen 9 9950X @ 285 W | 27,186 | 285 W | 95 |
 | Ryzen 9 9950X @ 100 W | 19,912 | 100 W | 199 |
@@ -54,9 +84,9 @@ large pages + MSR mod; Apple numbers are Kryptex estimates):
 | RTX 3080 LHR (minerstat est.) | ~1,560 | 90 W | ~17 |
 
 Takeaways: the X5 wins on hashes per box and per dollar, not clearly on hashes per joule
-against power-tuned modern CPUs. Unknown: whether it supports **RandomX v2** (`rx/2`), which
-Monero activates with the FCMP++ fork and which xmrig already supports — check before
-buying anything specialised.
+against power-tuned modern CPUs; the X9 would win on both, if it ships. For either, the
+open question is **RandomX v2** (`rx/2`), which Monero activates with the FCMP++ fork and
+which xmrig already supports — a CPU keeps working after the fork, an ASIC may not.
 
 ## GPU
 
@@ -79,8 +109,13 @@ buying anything specialised.
    the Apple machines in the table above.
 2. On existing Apple hardware: correct thread count, P-core residency, thermal headroom;
    possibly Linux (Asahi) for huge pages on M1/M2. See `08-optimization-opportunities.md`.
-3. An ASIC, if the economics (and RandomX v2 support) check out.
+3. An ASIC, if one can actually be bought, the economics work, and it survives (or you
+   accept the risk of) the RandomX v2 fork.
 
 Sources: tevador/RandomX README & design.md; github.com/MainSilent/RandomX-FPGA;
 NTHU implementation-competition summary; pool.kryptex.com/articles/antminer-x5-en;
-gist.github.com/SChernykh/6058ecf01c929883b9d19c7eeadc8809; minerstat.com GPU comparisons.
+gist.github.com/SChernykh/6058ecf01c929883b9d19c7eeadc8809; minerstat.com GPU comparisons;
+X9: asicminervalue.com/miners/bitmain/antminer-x9-1m, bitmain.com.de/?p=3987 (launch post),
+pool.kryptex.com/device/asic/bitmain/antminer-x9, monero.forum thread "Apparently Bitmain
+has discontinued the X9 Monero miner", pcpraha.cz and oneminers.com cancellation reports;
+FCMP++ timeline: cryptoticker.io (stressnet fork 5 Oct 2026), cryptonews.com (no mainnet date).

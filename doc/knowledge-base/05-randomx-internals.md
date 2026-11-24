@@ -97,6 +97,11 @@ dataset reads (64 B each), ~32,768 scratchpad 64 B reads + writes, 262,144 AES r
 
 ## RandomX v2 (`rx/2`, Monero after the FCMP++ hard fork, blob version ≥ 17)
 
+Timeline (as of Nov 2026, secondary sources): Monero mainnet still runs v1; the FCMP++
+stressnet (test network) forked on 5 Oct 2026 with v2 support; no mainnet fork date is
+announced (a non-binding developer target points to spring 2027). Dedicated RandomX ASICs
+(Bitmain X5, the announced X9) are not known to support v2 — see `09-fpga-asic-gpu.md`.
+
 `RandomX_ConfigurationMoneroV2` (`randomx.cpp`) = v1 plus:
 
 | Tweak | Change | Code |
