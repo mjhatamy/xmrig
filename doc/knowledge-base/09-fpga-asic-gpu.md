@@ -151,7 +151,9 @@ No meaningful gain is expected; running it next to the CPU miner may even lower 
    **2–3.4 H/s per GB/s** (V100 2,524 H/s at 900 GB/s; Titan V 2,199 H/s at 653 GB/s;
    RTX 2080 Ti 1,641 H/s at 616 GB/s; RTX 3080-class ~1.5 kH/s at 760 GB/s). The 2080 Ti
    nearly matches the V100 with 1/16 of its FP64 rate, so on NVIDIA the FP64 *rate* is not
-   the limit — memory is. Scaling an Apple GPU the same way gives an M1 (68 GB/s) ~140–230
+   the limit. Bandwidth is only a rough correlate (see "many threads + HBM" below: the real
+   limit is executing random programs on SIMT hardware). Scaling an Apple GPU the same way
+   gives an M1 (68 GB/s) ~140–230
    H/s and an M4 Max (546 GB/s) ~1.1–1.9 kH/s as an *upper bound*, before the cost of
    emulating FP64 and with the GPU and CPU fighting over the same DRAM (which raises the
    latency the CPU miner is bound by) and power budget. Realistic net gain over the CPU
@@ -175,10 +177,12 @@ B300 (Blackwell Ultra): 288 GB HBM3e at **8 TB/s**, ~1.1–1.4 kW TDP, ~1.3 TFLO
 HGX/DGX servers and NVL72 racks, tens of thousands of dollars per GPU.
 
 * **FP64 cut doesn't matter for RandomX**: a hash needs ~3.5 M FP64 operations, so even
-  30 kH/s needs only ~0.1 TFLOPS. Memory bandwidth/latency is the limit.
-* **Estimate**: 8,000 GB/s × 2–3.4 H/s per GB/s ≈ **16–27 kH/s** (v1), assuming the
-  kernels scale to it — unmeasured; HBM latency isn't lower than older HBM and the
-  RandomX GPU kernels date from 2019 (RandomX_CUDA, V100-era).
+  30 kH/s needs only ~0.1 TFLOPS. Neither does its huge HBM — see the next subsection.
+* **Estimate: ~5–25 kH/s (v1), unmeasured.** Scaling the V100 by SM count × clock (the
+  real limiter) gives ~6 kH/s; architectural gains (larger L1/shared memory and a much
+  larger L2 that can hold many hashes' 256 KiB L2 windows) could lift that a few times;
+  scaling by bandwidth (8,000 GB/s × 2–3.4 H/s per GB/s) gives 16–27 kH/s as an
+  optimistic ceiling. The RandomX GPU kernels date from 2019 (RandomX_CUDA, V100-era).
 * **That is one desktop CPU**: a Ryzen 9 9950X does 20–27 kH/s at 100–285 W for ~$600.
   During RandomX older datacenter GPUs drew ~55–60 % of TDP (V100 177 W, Titan V 125 W),
   so expect a B300 at very roughly 500–800 W ⇒ ~20–50 H/J vs 95–318 H/J for CPUs and
@@ -192,6 +196,37 @@ HGX/DGX servers and NVL72 racks, tens of thousands of dollars per GPU.
   wasn't checked here. A GPU path must support `rx/2` before the FCMP++ fork.
 * **Not usable with a Mac** (no NVIDIA drivers on macOS/Apple Silicon), and like any GPU
   it can only mine *alongside* the CPU, not make the CPU's hashes faster.
+
+### Why "many threads + HBM" doesn't fix it
+
+The idea — run thousands of hashes at once, each with its 2 MiB scratchpad in a wide HBM —
+is exactly what xmrig's GPU backend already does: it allocates one scratchpad per hash in
+flight in device memory (`(l3 + 64) × intensity`, `OclRxBaseRunner.cpp:216`) and lets 8
+or 16 GPU lanes cooperate on each hash (`WORKERS_PER_HASH`, `randomx_vm.cl`). Capacity is
+not the problem (288 GB holds ~140,000 scratchpads). What is:
+
+1. **HBM is wide, not fast.** It delivers bandwidth to *many independent* requests; each
+   single access still takes ~0.5 µs+ through a GPU memory hierarchy, vs ~1–5 ns for a
+   CPU's L1/L2. RandomX sizes its scratchpad levels to CPU caches (16 KiB / 256 KiB /
+   2 MiB ≈ L1 / L2 / L3) and makes every address depend on the previous result, so one
+   hash cannot issue its accesses "all at once" — it walks a dependency chain.
+2. **Random 8-byte accesses waste the bus.** Memory moves 32–64 B per transaction; an 8 B
+   operand load uses 1/4–1/8 of it, and random addresses defeat row-buffer locality and
+   coalescing.
+3. **But bandwidth isn't even the binding limit — execution is.** A V100 at 2,524 H/s
+   moves roughly 40–100 GB/s of scratchpad/dataset traffic (≈ 16–42 MB per hash by the
+   access counts in `05-randomx-internals.md`), ~5–12 % of its 900 GB/s. It executes
+   2,524 × 4.19 M ≈ 10.6 G RandomX instructions/s on 80 SMs at ~1.5 GHz ≈ **0.09 RandomX
+   instructions per SM per cycle**, while one CPU core on the test box ran ~2 G/s ≈
+   **0.7–1 per cycle** — a CPU core does ~10× the useful RandomX work per cycle of a GPU SM.
+   The causes: every hash runs a *different* random program but a warp executes one
+   instruction for 32 lanes (divergence, or idle lanes when 8 lanes share one program with
+   limited parallelism), instructions are interpreted rather than JIT-compiled (except on
+   AMD), 64-bit multiplies (IMUL/IMULH) are emulated with several 32-bit ops, branches
+   jump back, and each dependent memory step stalls for hundreds of cycles.
+
+More threads and more memory raise the number of hashes in flight; they don't raise the
+work each SM gets done per cycle, which is what RandomX deliberately starves on GPUs.
 
 ## What actually buys more RandomX hashes
 
